@@ -11,6 +11,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.109.0",
     "@tailwindcss/oxide-linux-x64-gnu": "^4.3.3",
+    "@tailwindcss/postcss": "^4.3.4",
     "jspdf": "^4.2.1",
     "lightningcss-linux-x64-gnu": "^1.33.0",
     "lucide-react": "^1.66.0",
