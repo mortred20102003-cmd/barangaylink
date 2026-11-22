@@ -45,10 +45,11 @@ export default function Sidebar() {
   ]
 
   // Admin-only navigation
-  const adminItems = [
+    const adminItems = [
     { name: 'Residents', href: '/dashboard/residents', icon: Users },
-    { name: 'Admin Panel', href: '/dashboard/admin', icon: ShieldCheck },
-    { name: 'Reports', href: '/dashboard/reports', icon: BarChart3 },
+    { name: 'Processing', href: '/dashboard/admin/processing', icon: ShieldCheck },
+    { name: 'Analytics', href: '/dashboard/admin', icon: BarChart3 }, // Points to the new dashboard
+    { name: 'Reports', href: '/dashboard/reports', icon: FileText },
   ]
 
   if (loading) return <aside className="w-64 bg-[#0A3A2A] text-white min-h-screen"></aside>

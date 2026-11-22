@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { WifiOff, RefreshCw, CheckCircle2, FileText, Info, Save, Clock } from 'lucide-react'
+import { Wifi, RefreshCw, CheckCircle2, FileText, Info, Save, Clock } from 'lucide-react'
 import { supabase } from '../../../../lib/supabase' 
 
 export default function NewRequestPage() {
-  const [isOffline, setIsOffline] = useState(true) 
+  // Changed default to false so it's online
+  const [isOffline, setIsOffline] = useState(false) 
   const [isSyncing, setIsSyncing] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -17,13 +18,22 @@ export default function NewRequestPage() {
     e.preventDefault()
     setLoading(true)
 
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      alert("You must be logged in to request a document.")
+      setLoading(false)
+      return
+    }
+
     const { error } = await supabase
       .from('document_requests')
       .insert([
         { 
           document_type: documentType, 
           purpose: purpose,
-          status: 'Pending'
+          status: 'Pending',
+          user_id: user.id
         }
       ])
 
@@ -38,34 +48,21 @@ export default function NewRequestPage() {
     }
   }
 
-  const handleSync = () => {
-    setIsSyncing(true)
-    setTimeout(() => {
-      setIsSyncing(false)
-      setIsOffline(false)
-    }, 2000)
-  }
-
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       
-      <div className="bg-[#FFF3CD] border border-[#FFE69C] rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <WifiOff className="text-orange-500 w-6 h-6 shrink-0" />
-          <div>
-            <p className="font-bold text-orange-800">You are currently offline</p>
-            <p className="text-sm text-orange-700">You can still encode and save data. The changes will sync automatically once your internet connection is back.</p>
+      {/* The yellow banner is now hidden by default because isOffline is false */}
+      {isOffline && (
+        <div className="bg-[#FFF3CD] border border-[#FFE69C] rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Wifi className="text-orange-500 w-6 h-6 shrink-0" />
+            <div>
+              <p className="font-bold text-orange-800">You are currently offline</p>
+              <p className="text-sm text-orange-700">You can still encode and save data. The changes will sync automatically once your internet connection is back.</p>
+            </div>
           </div>
         </div>
-        <button 
-          onClick={handleSync}
-          disabled={isSyncing}
-          className="flex items-center gap-2 border border-[#0A3A2A] text-[#0A3A2A] px-4 py-2 rounded-lg font-semibold hover:bg-[#E8F5F1] transition-colors whitespace-nowrap"
-        >
-          {isSyncing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
-          {isSyncing ? 'Syncing...' : 'Sync Now'}
-        </button>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
@@ -75,17 +72,11 @@ export default function NewRequestPage() {
               <FileText className="text-[#0A3A2A]" />
               Document Request
             </h2>
+            {/* The badge now dynamically changes based on status */}
             <span className={`px-3 py-1 rounded-full text-xs font-bold ${isOffline ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
               {isOffline ? 'Offline Mode' : 'Online'}
             </span>
           </div>
-
-          {isOffline && (
-            <div className="bg-[#E8F5F1] text-[#0A3A2A] p-3 rounded-lg flex items-start gap-3 mb-6 text-sm">
-              <Info className="w-5 h-5 shrink-0" />
-              <p>Your request will be saved locally and synced later.</p>
-            </div>
-          )}
 
           <form onSubmit={handleSave} className="space-y-4">
             <div>
