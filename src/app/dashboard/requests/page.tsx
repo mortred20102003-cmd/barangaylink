@@ -1,126 +1,150 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronRight, FileText } from 'lucide-react'
-import { supabase } from '../../../lib/supabase' // FIXED: 3 dots instead of 4
+import Link from 'next/link'
+import { supabase } from '@/lib/supabase'
+import { FileText, Plus, CheckCircle2, XCircle, MessageSquare } from 'lucide-react'
+import QRCode from 'react-qr-code'
 
-export default function MyRequestsPage() {
+const WORKFLOW_STEPS = ['Pending', 'Approved', 'Ready for Pickup', 'Released']
+
+export default function RequestsListPage() {
   const [requests, setRequests] = useState<any[]>([])
-  const [selectedRequest, setSelectedRequest] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [origin, setOrigin] = useState('')
 
   useEffect(() => {
+    setOrigin(window.location.origin)
+
     const fetchRequests = async () => {
-      const { data, error } = await supabase
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data } = await supabase
         .from('document_requests')
         .select('*')
+        .eq('user_id', user.id)
         .order('date_requested', { ascending: false })
 
-      if (!error && data) {
-        setRequests(data)
-        if (data.length > 0) setSelectedRequest(data[0])
-      }
+      if (data) setRequests(data)
       setLoading(false)
     }
     fetchRequests()
   }, [])
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Approved': return 'bg-green-100 text-green-700'
-      case 'Pending': return 'bg-yellow-100 text-yellow-700'
-      case 'Ready for Pickup': return 'bg-blue-100 text-blue-700'
-      default: return 'bg-gray-100 text-gray-700'
-    }
-  }
-
-  const getProgress = (status: string) => {
-    if (status === 'Pending') return 25
-    if (status === 'Approved') return 75
-    if (status === 'Released') return 100
-    return 25
-  }
-
-  if (loading) return <div className="p-8 text-center">Loading requests...</div>
-  if (requests.length === 0) return <div className="p-8 text-center text-gray-500">No requests found. Go request a document first!</div>
+  if (loading) return <div className="p-8 text-center">Loading...</div>
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">My Requests</h1>
-        <p className="text-gray-500 mt-1">Track the status of your document requests.</p>
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">My Requests</h1>
+          <p className="text-gray-500 mt-1">Track your document requests.</p>
+        </div>
+        <Link
+          href="/dashboard/requests/new"
+          className="flex items-center gap-2 bg-[#0A3A2A] text-white px-4 py-2 rounded-lg font-semibold hover:bg-[#155A43]"
+        >
+          <Plus className="w-4 h-4" /> New Request
+        </Link>
       </div>
 
-      {selectedRequest && (
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <FileText className="text-[#0A3A2A]" />
-              Request {selectedRequest.id.slice(0, 4).toUpperCase()} · {selectedRequest.document_type}
-            </h2>
-            <span className={`px-4 py-1.5 rounded-full text-sm font-bold ${getStatusColor(selectedRequest.status)}`}>
-              {selectedRequest.status}
-            </span>
-          </div>
-
-          <div className="relative mb-8">
-            <div className="overflow-hidden h-3 mb-4 text-xs flex rounded-full bg-gray-200">
-              <div 
-                style={{ width: `${getProgress(selectedRequest.status)}%` }} 
-                className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-[#0A3A2A] transition-all duration-500"
-              ></div>
-            </div>
-            
-            <div className="flex justify-between text-sm font-semibold text-gray-500">
-              {['Submitted', 'Under Review', 'Approved', 'Released'].map((step, index) => {
-                const stepPercent = (index / 3) * 100
-                const isActive = getProgress(selectedRequest.status) >= stepPercent
-                return (
-                  <span key={step} className={isActive ? 'text-[#0A3A2A]' : ''}>
-                    {step}
-                  </span>
-                )
-              })}
-            </div>
-          </div>
+      {requests.length === 0 ? (
+        <div className="bg-white p-12 text-center rounded-xl border border-gray-200 shadow-sm">
+          <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-gray-900">No requests yet</h3>
+          <p className="text-gray-500 mb-4">Start by requesting a document.</p>
+          <Link href="/dashboard/requests/new" className="inline-flex items-center gap-2 bg-[#0A3A2A] text-white px-4 py-2 rounded-lg font-semibold hover:bg-[#155A43]">
+            <Plus className="w-4 h-4" /> Request Document
+          </Link>
         </div>
-      )}
+      ) : (
+        <div className="space-y-4">
+          {requests.map(req => {
+            const currentStep = WORKFLOW_STEPS.indexOf(req.status)
+            const isRejected = req.status === 'Rejected'
+            const refNo = req.reference_number || `REF-2026-${req.id.slice(0, 6).toUpperCase()}`
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 text-sm">
-              <th className="p-4 font-semibold">Request ID</th>
-              <th className="p-4 font-semibold">Document</th>
-              <th className="p-4 font-semibold">Status</th>
-              <th className="p-4 font-semibold text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {requests.map((req) => (
-              <tr key={req.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-                <td className="p-4 font-bold text-gray-900">{req.id.slice(0, 4).toUpperCase()}</td>
-                <td className="p-4 text-gray-700">{req.document_type}</td>
-                <td className="p-4">
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(req.status)}`}>
+            return (
+              <div key={req.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="p-4 flex justify-between items-start border-b border-gray-100">
+                  <div>
+                    <p className="font-bold text-gray-900">{req.document_type}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Ref: <span className="font-mono font-semibold">{refNo}</span> • {new Date(req.date_requested).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase
+                    ${isRejected ? 'bg-red-100 text-red-700' :
+                      req.status === 'Released' ? 'bg-green-100 text-green-700' :
+                      req.status === 'Ready for Pickup' ? 'bg-purple-100 text-purple-700' :
+                      req.status === 'Approved' ? 'bg-blue-100 text-blue-700' :
+                      'bg-yellow-100 text-yellow-700'}`}>
                     {req.status}
                   </span>
-                </td>
-                <td className="p-4 text-right">
-                  <button 
-                    onClick={() => setSelectedRequest(req)}
-                    className="inline-flex items-center gap-1 border border-[#0A3A2A] text-[#0A3A2A] px-4 py-1.5 rounded-lg font-semibold hover:bg-[#E8F5F1] transition-colors"
-                  >
-                    View progress <ChevronRight className="w-4 h-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                </div>
 
+                {isRejected && req.remarks && (
+                  <div className="bg-red-50 p-3 border-b border-red-100 flex items-start gap-2">
+                    <XCircle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-bold text-red-800 uppercase">Reason for Rejection</p>
+                      <p className="text-sm text-red-700">{req.remarks}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-4 bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    {WORKFLOW_STEPS.map((step, idx) => {
+                      const isDone = idx <= currentStep
+                      const isCurrent = idx === currentStep
+                      return (
+                        <div key={step} className="flex items-center flex-1">
+                          <div className="flex flex-col items-center">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 text-xs font-bold
+                              ${isDone ? 'bg-[#0A3A2A] border-[#0A3A2A] text-white' : 'bg-white border-gray-300 text-gray-400'}`}>
+                              {isDone ? <CheckCircle2 className="w-4 h-4" /> : idx + 1}
+                            </div>
+                            <span className={`mt-1 text-[10px] font-semibold text-center
+                              ${isCurrent ? 'text-[#0A3A2A]' : isDone ? 'text-gray-700' : 'text-gray-400'}`}>
+                              {step}
+                            </span>
+                          </div>
+                          {idx < WORKFLOW_STEPS.length - 1 && (
+                            <div className={`h-0.5 flex-1 mx-1 -mt-5 ${idx < currentStep ? 'bg-[#0A3A2A]' : 'bg-gray-300'}`} />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* QR + Chat section - appears when released */}
+                {req.status === 'Released' && (
+                  <div className="p-4 bg-[#E8F5F1] border-t border-green-200 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="bg-white p-2 border border-gray-200 rounded">
+                        <QRCode value={`${origin}/verify/${refNo}`} size={72} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-[#0A3A2A]">Document Released</p>
+                        <p className="text-xs text-[#155A43]">Scan to verify authenticity</p>
+                      </div>
+                    </div>
+                    <Link
+                      href="/dashboard/messages"
+                      className="flex items-center gap-2 bg-white border border-[#0A3A2A]/20 text-[#0A3A2A] px-3 py-2 rounded-lg text-sm font-semibold hover:bg-white/80"
+                    >
+                      <MessageSquare className="w-4 h-4" /> Chat with Staff
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

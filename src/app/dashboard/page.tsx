@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { CheckCircle2, Clock, ShieldCheck } from 'lucide-react'
 
 export default function Dashboard() {
-  const [userEmail, setUserEmail] = useState<string>('Resident')
+  const [userProfile, setUserProfile] = useState<any>(null)
   const [stats, setStats] = useState({
     active: 0,
     approved: 0,
@@ -16,24 +17,33 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      // 1. Get the logged in user
+      // 1. Get the logged-in user
       const { data: { user } } = await supabase.auth.getUser()
-      if (user && user.email) {
-        // Capitalize the first letter of the email for a nicer greeting
-        const name = user.email.split('@')[0]
-        setUserEmail(name.charAt(0).toUpperCase() + name.slice(1))
-      }
-
-      // 2. Fetch their requests
-      const { data: requests } = await supabase.from('document_requests').select('*')
       
-      if (requests) {
-        setStats({
-          active: requests.filter(r => r.status !== 'Released').length,
-          approved: requests.filter(r => r.status === 'Approved' || r.status === 'Ready for Pickup').length,
-          pending: requests.filter(r => r.status === 'Pending').length,
-          total: requests.length
-        })
+      if (user) {
+        // Fetch their full name and details from the profiles table
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single()
+          
+        setUserProfile(profile)
+
+        // 2. Fetch their document requests
+        const { data: requests } = await supabase
+          .from('document_requests')
+          .select('*')
+          .eq('user_id', user.id)
+        
+        if (requests) {
+          setStats({
+            active: requests.filter(r => r.status !== 'Released').length,
+            approved: requests.filter(r => r.status === 'Approved' || r.status === 'Ready for Pickup').length,
+            pending: requests.filter(r => r.status === 'Pending').length,
+            total: requests.length
+          })
+        }
       }
       setLoading(false)
     }
@@ -41,36 +51,67 @@ export default function Dashboard() {
     fetchDashboardData()
   }, [])
 
+  if (loading) return <div className="p-8 text-center text-gray-500">Loading dashboard...</div>
+
+  // Fallback name if they haven't set one in their profile yet
+  const displayName = userProfile?.fullname || userProfile?.email?.split('@')[0] || 'Resident'
+  
+  // Generate a mock Resident ID based on their database ID
+  const residentId = userProfile?.id ? `RES-2026-${userProfile.id.slice(0, 3).toUpperCase()}` : 'RES-2026-XXX'
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Welcome back, {userEmail}</h1>
-        <p className="text-gray-500 mt-1">Here is an overview of your barangay requests.</p>
+      {/* --- USER INFORMATION CARD --- */}
+      <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div className="flex items-center gap-5">
+          <div className="w-16 h-16 bg-[#E8F5F1] text-[#0A3A2A] rounded-full flex items-center justify-center text-2xl font-bold border-2 border-[#0A3A2A]">
+            {displayName.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Welcome back, {displayName}</h1>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mt-2 text-sm text-gray-600">
+              <p><span className="font-semibold text-gray-800">Resident ID:</span> {residentId}</p>
+              <p><span className="font-semibold text-gray-800">Barangay:</span> Lamion</p>
+            </div>
+          </div>
+        </div>
+        
+                {/* Dynamic Verification Badge */}
+        {userProfile?.verification_status === 'Verified' ? (
+          <div className="bg-green-50 text-green-700 px-4 py-2 rounded-xl font-semibold flex items-center gap-2 border border-green-200 shadow-sm">
+            <CheckCircle2 className="w-5 h-5" />
+            Verified Resident
+          </div>
+        ) : (
+          <div className="bg-yellow-50 text-yellow-700 px-4 py-2 rounded-xl font-semibold flex items-center gap-2 border border-yellow-200 shadow-sm">
+            <Clock className="w-5 h-5" />
+            Pending Verification
+          </div>
+        )}
       </div>
 
-      {/* Stats Cards */}
+      {/* --- STATS CARDS --- */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <p className="text-sm font-medium text-gray-500">Active Requests</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{loading ? '...' : stats.active}</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{stats.active}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <p className="text-sm font-medium text-gray-500">Approved Documents</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{loading ? '...' : stats.approved}</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{stats.approved}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <p className="text-sm font-medium text-gray-500">Pending Requests</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{loading ? '...' : stats.pending}</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{stats.pending}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <p className="text-sm font-medium text-gray-500">Total Requests</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{loading ? '...' : stats.total}</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{stats.total}</p>
         </div>
       </div>
 
-      {/* Bottom Section: Notifications & Quick Actions */}
+      {/* --- BOTTOM SECTION --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         
         {/* Recent Notifications */}

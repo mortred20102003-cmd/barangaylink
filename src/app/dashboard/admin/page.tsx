@@ -1,161 +1,150 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { FileText, CheckCircle, Clock, Package, Printer } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { supabase } from '../../../lib/supabase'
-import { jsPDF } from 'jspdf'
-import AdminGuard from '../../../components/AdminGuard' // Added the Guard
+import AdminGuard from '../../../components/AdminGuard'
 
 export default function AdminDashboard() {
-  const [requests, setRequests] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-
-  const fetchAllRequests = async () => {
-    const { data, error } = await supabase
-      .from('document_requests')
-      .select('*')
-      .order('date_requested', { ascending: false })
-
-    if (!error && data) {
-      setRequests(data)
-    }
-    setLoading(false)
-  }
+  const [stats, setStats] = useState({ residents: 0, pending: 0, seniors: 0, indigents: 0 })
+  const [monthlyData, setMonthlyData] = useState<any[]>([])
+  const [documentData, setDocumentData] = useState<any[]>([])
 
   useEffect(() => {
-    fetchAllRequests()
+    const fetchDashboardData = async () => {
+      const { count: residentCount } = await supabase.from('residents').select('*', { count: 'exact', head: true })
+      const { data: requests } = await supabase.from('document_requests').select('*')
+      
+      let pendingCount = 0
+      let clearanceCount = 0
+      let residencyCount = 0
+      let indigencyCount = 0
+      const monthlyCounts: Record<string, number> = { Jan: 0, Feb: 0, Mar: 0, Apr: 0, May: 0, Jun: 0, Jul: 0, Aug: 0, Sep: 0, Oct: 0, Nov: 0, Dec: 0 }
+
+      if (requests) {
+        requests.forEach(req => {
+          if (req.status === 'Pending') pendingCount++
+          if (req.document_type === 'Barangay Clearance') clearanceCount++
+          if (req.document_type === 'Certificate of Residency') residencyCount++
+          if (req.document_type === 'Certificate of Indigency') indigencyCount++
+          
+          if (req.date_requested) {
+            const date = new Date(req.date_requested)
+            const month = date.toLocaleString('default', { month: 'short' })
+            if (monthlyCounts[month] !== undefined) monthlyCounts[month]++
+          }
+        })
+      }
+
+      setStats({ residents: residentCount || 0, pending: pendingCount, seniors: 0, indigents: 0 })
+
+      const formattedMonthly = Object.keys(monthlyCounts).map(key => ({ name: key, requests: monthlyCounts[key] })).filter(item => item.requests > 0)
+      setMonthlyData(formattedMonthly)
+
+      const totalDocs = clearanceCount + residencyCount + indigencyCount || 1
+      setDocumentData([
+        { name: 'Barangay Clearance', count: clearanceCount, percent: (clearanceCount / totalDocs) * 100 },
+        { name: 'Certificate of Residency', count: residencyCount, percent: (residencyCount / totalDocs) * 100 },
+        { name: 'Certificate of Indigency', count: indigencyCount, percent: (indigencyCount / totalDocs) * 100 },
+      ])
+      setLoading(false)
+    }
+    fetchDashboardData()
   }, [])
 
-  const updateStatus = async (id: string, newStatus: string) => {
-    const { error } = await supabase
-      .from('document_requests')
-      .update({ status: newStatus })
-      .eq('id', id)
-
-    if (error) {
-      alert("Error updating: " + error.message)
-    } else {
-      fetchAllRequests()
-    }
-  }
-
-  const generatePDF = (req: any) => {
-    const doc = new jsPDF()
-    
-    // Header
-    doc.setFontSize(10)
-    doc.text("Republic of the Philippines", 105, 15, { align: "center" })
-    doc.text("Province of Tawi-Tawi", 105, 20, { align: "center" })
-    doc.text("Municipality of Bongao", 105, 25, { align: "center" })
-    doc.setFontSize(12)
-    doc.setFont("helvetica", "bold")
-    doc.text("BARANGAY LAMION", 105, 32, { align: "center" })
-    doc.text("OFFICE OF THE PUNONG BARANGAY", 105, 38, { align: "center" })
-    
-    // Title
-    doc.setFontSize(18)
-    doc.text("BARANGAY CLEARANCE", 105, 60, { align: "center" })
-    
-    // Body
-    doc.setFontSize(11)
-    doc.setFont("helvetica", "normal")
-    
-    const bodyText = `TO WHOM IT MAY CONCERN:\n\nThis is to certify that JUAN DELA CRUZ, a bonafide resident of Barangay Lamion, Bongao, Tawi-Tawi, is known to be of good moral character and has no derogatory record filed in this office.\n\nThis clearance is issued upon the request of the above-named person in connection with his/her purpose: "${req.purpose || 'General Purpose'}".\n\nIssued this ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} at Barangay Lamion, Bongao, Tawi-Tawi.`
-    
-    const splitText = doc.splitTextToSize(bodyText, 160)
-    doc.text(splitText, 25, 75, { lineHeightFactor: 1.5 })
-    
-    // Footer
-    doc.setFont("helvetica", "bold")
-    doc.text("HON. BARANGAY CAPTAIN", 140, 150, { align: "center" })
-    doc.setFont("helvetica", "normal")
-    doc.text("Punong Barangay", 140, 155, { align: "center" })
-    
-    // Reference
-    doc.setFontSize(8)
-    doc.setTextColor(150)
-    doc.text(`Reference No: ${req.id.slice(0, 8).toUpperCase()}`, 105, 190, { align: "center" })
-    doc.text(`Document Type: ${req.document_type}`, 105, 195, { align: "center" })
-    
-    doc.save(`Clearance_${req.id.slice(0, 4)}.pdf`)
-  }
-
-  if (loading) return <div className="p-8 text-center">Loading all requests...</div>
+  if (loading) return <div className="p-8 text-center">Loading analytics...</div>
 
   return (
     <AdminGuard>
-      <div className="max-w-6xl mx-auto space-y-8">
-        
+      <div className="max-w-7xl mx-auto space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-500 mt-1">Manage and approve resident document requests.</p>
+          <p className="text-gray-500 mt-1">Overview of barangay operations and records.</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 text-sm">
-                <th className="p-4 font-semibold">Request ID</th>
-                <th className="p-4 font-semibold">Document Type</th>
-                <th className="p-4 font-semibold">Purpose</th>
-                <th className="p-4 font-semibold">Current Status</th>
-                <th className="p-4 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requests.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-gray-500">
-                    No requests in the system yet.
-                  </td>
-                </tr>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <p className="text-sm font-medium text-gray-500">Residents</p>
+            <p className="text-3xl font-bold text-gray-900 mt-1">{stats.residents}</p>
+          </div>
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <p className="text-sm font-medium text-gray-500">Seniors</p>
+            <p className="text-3xl font-bold text-gray-900 mt-1">{stats.seniors}</p>
+          </div>
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <p className="text-sm font-medium text-gray-500">Indigents</p>
+            <p className="text-3xl font-bold text-gray-900 mt-1">{stats.indigents}</p>
+          </div>
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <p className="text-sm font-medium text-gray-500">Pending Requests</p>
+            <p className="text-3xl font-bold text-[#0A3A2A] mt-1">{stats.pending}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <h2 className="text-lg font-bold text-gray-900 mb-6">Monthly Requests</h2>
+            <div className="h-64 w-full">
+              {monthlyData.length === 0 ? (
+                <p className="text-gray-400 text-center mt-10">No data yet.</p>
               ) : (
-                requests.map((req) => (
-                  <tr key={req.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                    <td className="p-4 font-bold text-gray-900">{req.id.slice(0, 4).toUpperCase()}</td>
-                    <td className="p-4 text-gray-700">{req.document_type}</td>
-                    <td className="p-4 text-gray-500">{req.purpose || 'N/A'}</td>
-                    <td className="p-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        req.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' :
-                        req.status === 'Approved' ? 'bg-green-100 text-green-700' :
-                        req.status === 'Ready for Pickup' ? 'bg-blue-100 text-blue-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {req.status}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right space-x-2">
-                      <button 
-                        onClick={() => generatePDF(req)}
-                        className="bg-gray-800 text-white p-2 rounded-lg hover:bg-gray-900 transition-colors"
-                        title="Download PDF Clearance"
-                      >
-                        <Printer className="w-4 h-4" />
-                      </button>
-
-                      <button 
-                        onClick={() => updateStatus(req.id, 'Approved')}
-                        className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 transition-colors"
-                        title="Approve"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => updateStatus(req.id, 'Ready for Pickup')}
-                        className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition-colors"
-                        title="Mark Ready for Pickup"
-                      >
-                        <Package className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" tick={{fontSize: 12}} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip cursor={{fill: '#f3f4f6'}} />
+                    <Bar dataKey="requests" fill="#155A43" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               )}
-            </tbody>
-          </table>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <h2 className="text-lg font-bold text-gray-900 mb-6">Resident Growth</h2>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={[
+                  { month: 'May', residents: Math.floor(stats.residents * 0.8) },
+                  { month: 'Jun', residents: Math.floor(stats.residents * 0.85) },
+                  { month: 'Jul', residents: Math.floor(stats.residents * 0.9) },
+                  { month: 'Aug', residents: Math.floor(stats.residents * 0.95) },
+                  { month: 'Sep', residents: Math.floor(stats.residents * 0.98) },
+                  { month: 'Oct', residents: stats.residents },
+                ]}>
+                  <defs>
+                    <linearGradient id="colorRes" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0A3A2A" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#0A3A2A" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="month" tick={{fontSize: 12}} />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="residents" stroke="#0A3A2A" strokeWidth={2} fillOpacity={1} fill="url(#colorRes)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
 
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-900 mb-6">Document Issuance</h2>
+          <div className="space-y-6">
+            {documentData.map((doc, index) => (
+              <div key={index}>
+                <div className="flex justify-between text-sm font-semibold mb-2">
+                  <span className="text-gray-700">{doc.name}</span>
+                  <span className="text-gray-900">{doc.count}</span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-3">
+                  <div className="bg-[#0A3A2A] h-3 rounded-full transition-all duration-500" style={{ width: `${doc.percent}%` }}></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </AdminGuard>
   )

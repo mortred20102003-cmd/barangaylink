@@ -19,14 +19,38 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    // 1. Authenticate with Supabase
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
-    if (error) {
-      setError(error.message)
+    if (authError) {
+      setError(authError.message)
       setLoading(false)
-    } else {
-      router.push('/dashboard')
+      return
     }
+
+    // 2. Fetch the user's role to ensure they are a resident
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', authData.user.id)
+      .single()
+
+    if (profileError) {
+      setError("Database Error: " + profileError.message)
+      setLoading(false)
+      return
+    }
+
+    // 3. SECURITY CHECK: Kick out anyone who isn't a resident
+    if (profile?.role !== 'resident') {
+      await supabase.auth.signOut() // Log them out immediately
+      setError(`Access Denied. This portal is for residents only. Please use the Staff Portal.`)
+      setLoading(false)
+      return
+    }
+
+    // 4. Success! Redirect to Resident Dashboard
+    router.push('/dashboard')
   }
 
   return (

@@ -28,17 +28,25 @@ export default function StaffLoginPage() {
       return
     }
 
-    // 2. SECURITY CHECK: Verify if this user is actually an Admin
-    const { data: profile } = await supabase
+    // 2. SECURITY CHECK: Verify if this user is authorized staff
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', authData.user.id)
       .single()
 
-    if (profile?.role !== 'admin') {
-      // If they are a resident, kick them out immediately!
+    if (profileError) {
+      setError("Database Error: " + profileError.message)
+      setLoading(false)
+      return
+    }
+
+    // FIX: Allow all authorized staff roles to log in
+    const authorizedRoles = ['super_admin', 'admin', 'captain', 'secretary', 'staff']
+    
+    if (!profile || !authorizedRoles.includes(profile.role)) {
       await supabase.auth.signOut()
-      setError("Access Denied. This portal is for Barangay Staff only.")
+      setError(`Access Denied. Your role is: ${profile?.role || 'Missing'}`)
       setLoading(false)
       return
     }

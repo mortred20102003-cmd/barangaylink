@@ -18,16 +18,31 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
         return
       }
 
-      const { data } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
+      // --- 1. HARDCODE SUPER ADMIN EMAIL ---
+      const SUPER_ADMIN_EMAIL = 'mchaeldeleon@gmail.com'
+      
+      let userRole = ''
 
-      if (data?.role === 'admin') {
-        setIsAuthorized(true)
+      if (user.email === SUPER_ADMIN_EMAIL) {
+        userRole = 'super_admin'
       } else {
-        // If not admin, kick them back to the regular dashboard
+        // Check database for other roles
+        const { data } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+        
+        userRole = data?.role || 'resident'
+      }
+
+      const authorizedRoles = ['super_admin', 'admin', 'captain', 'secretary', 'staff']
+      
+      if (authorizedRoles.includes(userRole)) {
+        setIsAuthorized(true)
+        // Save role to localStorage so the dashboard page can read it
+        localStorage.setItem('userRole', userRole) 
+      } else {
         router.push('/dashboard')
       }
       setLoading(false)
