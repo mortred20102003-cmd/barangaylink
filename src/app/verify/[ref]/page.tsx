@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { CheckCircle2, XCircle, FileText } from 'lucide-react'
+import { CheckCircle2, XCircle } from 'lucide-react'
 
-export default function VerifyPage() {
+// 1. Rename your original component to VerifyContent
+function VerifyContent() {
   const params = useParams()
   const refNo = params.ref as string
   const [loading, setLoading] = useState(true)
@@ -70,5 +71,14 @@ export default function VerifyPage() {
         )}
       </div>
     </div>
+  )
+}
+
+// 2. Export the main page, wrapping VerifyContent in Suspense
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Loading verification page...</div>}>
+      <VerifyContent />
+    </Suspense>
   )
 }
