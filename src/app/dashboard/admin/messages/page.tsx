@@ -60,7 +60,7 @@ export default function MessagesPage() {
     <div className="max-w-3xl mx-auto h-[calc(100vh-8rem)] flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm">
       <div className="p-4 border-b flex items-center gap-2">
         <MessageSquare className="w-5 h-5 text-[#0A3A2A]" />
-        <h1 className="text-lg font-bold text-gray-900">Barangay Chat</h1>
+        <h1 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0A3A2A]">Barangay Chat</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -84,7 +84,7 @@ export default function MessagesPage() {
           onChange={(e) => setNewMessage(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
           placeholder="Type a message..."
-          className="flex-1 px-4 py-2 border rounded-lg"
+          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0A3A2A]"
         />
         <button onClick={sendMessage} className="bg-[#0A3A2A] text-white px-4 rounded-lg hover:bg-[#155A43]">
           <Send className="w-4 h-4" />
